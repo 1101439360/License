@@ -1,7 +1,9 @@
-package com.dtranx.tools.license.bean;
+package com.phh.tools.license.bean;
 
 import lombok.Builder;
 import lombok.Data;
+
+import java.util.List;
 
 /**
  * @author penghao
@@ -14,9 +16,7 @@ public class CheckParams {
 
     private long lastValidateTime;
 
-    private String macAddress;
-
-    private String cpuSerial;
+   private List<String> customParams;
 
     private Long generatedTime;
 

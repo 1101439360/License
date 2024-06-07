@@ -1,4 +1,4 @@
-package com.dtranx.tools.license.utils;
+package com.phh.tools.license.utils;
 
 import org.springframework.util.Base64Utils;
 

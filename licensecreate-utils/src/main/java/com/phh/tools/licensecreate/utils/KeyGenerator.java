@@ -1,4 +1,4 @@
-package com.dtranx.tools.licensecreate.utils;
+package com.phh.tools.licensecreate.utils;
 
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;

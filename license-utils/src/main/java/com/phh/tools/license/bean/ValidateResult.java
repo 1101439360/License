@@ -1,4 +1,4 @@
-package com.dtranx.tools.license.bean;
+package com.phh.tools.license.bean;
 
 import lombok.Data;
 

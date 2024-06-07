@@ -1,23 +1,21 @@
-package com.dtranx.tools.license.utils;
+package com.phh.tools.license.utils;
 
 
-import com.dtranx.tools.license.bean.CheckParams;
-import com.dtranx.tools.license.bean.ValidateCodeEnum;
-import com.dtranx.tools.license.bean.ValidateResult;
+import com.phh.tools.license.bean.CheckParams;
+import com.phh.tools.license.bean.ValidateCodeEnum;
+import com.phh.tools.license.bean.ValidateResult;
 import lombok.extern.slf4j.Slf4j;
 import org.dom4j.Document;
 import org.dom4j.Element;
 import org.dom4j.io.OutputFormat;
 import org.dom4j.io.SAXReader;
 import org.dom4j.io.XMLWriter;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
 import java.io.FileWriter;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * @author PH
@@ -26,7 +24,10 @@ import java.util.Map;
 @Component
 public class LicenseManager {
 
-    public static Map<String, ValidateResult> validate() {
+    @Autowired
+    MySystemUtils mySystemUtils;
+
+    public Map<String, ValidateResult> validate() {
         Map<String, ValidateResult> result = new HashMap<>();
         CheckParams checkParams = null;
         try {
@@ -40,18 +41,14 @@ public class LicenseManager {
             return result;
         }
 
-        //校验mac地址
-        if (!checkParams.getMacAddress().equals(Systemutils.getMacAddress())) {
-            result.put("Authorize", ValidateResult.error(ValidateCodeEnum.UNAUTHORIZED));
+        //校验自定义参数
+        checkCustomParams(result, checkParams);
+        if (result.size() > 1) {
             return result;
         }
-        //校验cpu序列号
-        if (!checkParams.getCpuSerial().equals(Systemutils.getCpuNum())) {
-            result.put("Authorize", ValidateResult.error(ValidateCodeEnum.UNAUTHORIZED));
-            return result;
-        }
+
+        //校验有效期限
         long currentTi = System.currentTimeMillis();
-        //校验时间
         if (notAfterLastValidateTime(checkParams.getLastValidateTime(), currentTi) || notAfter(checkParams.getGeneratedTime(), currentTi)
                 || notBefore(checkParams.getExpiredTime(), currentTi)) {
             result.put("Authorize", ValidateResult.error(ValidateCodeEnum.EXPIRED));
@@ -62,14 +59,37 @@ public class LicenseManager {
         return result;
     }
 
-    public static String getSystemSign() {
-        String MacAddress = Systemutils.getMacAddress();
-        String cpuNum = Systemutils.getCpuNum();
-        return AESUtils.encrypt(MacAddress + "-" + cpuNum);
+    private void checkCustomParams(Map<String, ValidateResult> result, CheckParams checkParams) {
+        //校验mac地址
+        List<String> customParams = checkParams.getCustomParams();
+        if (!customParams.get(0).equals(mySystemUtils.getParam0())) {
+            result.put("Authorize", ValidateResult.error(ValidateCodeEnum.UNAUTHORIZED));
+            return;
+        }
+        //校验cpu序列号
+        if (!customParams.get(1).equals(mySystemUtils.getParam1())) {
+            result.put("Authorize", ValidateResult.error(ValidateCodeEnum.UNAUTHORIZED));
+            return;
+        }
+        //todo 校验自定义参数
+        //if (!customParams.get(2).equals(mySystemUtils.getParam2())) {
+        //            result.put("Authorize", ValidateResult.error(ValidateCodeEnum.UNAUTHORIZED));
+        //            return result;
+        //        }
+    }
+
+    public String getSystemSign() {
+        //control param 0
+        String param0 = mySystemUtils.getParam0();
+        //control param 1
+        String param1 = mySystemUtils.getParam1();
+        //todo custom control param
+//        return AESUtils.encrypt(macAddress + "-" + cpuNum+ "-" + "cutomParam");
+        return AESUtils.encrypt(param0 + "-" + param1);
     }
 
 
-    public static void updateSign(String sign) {
+    public void updateSign(String sign) {
         try {
             Document document = readLicense();
             Element rootElement = document.getRootElement();
@@ -86,11 +106,17 @@ public class LicenseManager {
             xmlWriter.write(document);
             xmlWriter.close();
             log.info("更新授权码成功");
+            //更新检查结果
+            validateAfterUpdateSign();
         } catch (Exception e) {
             e.printStackTrace();
             throw new RuntimeException("更新授权码失败！");
         }
 
+    }
+
+    public void validateAfterUpdateSign() {
+        LicenseThread.validateResult = validate();
     }
 
     private static boolean notAfterLastValidateTime(long lastValidateTime, long currentTi) {
@@ -106,7 +132,7 @@ public class LicenseManager {
     }
 
 
-    private static CheckParams getCheckParams(Map<String, ValidateResult> result) {
+    private CheckParams getCheckParams(Map<String, ValidateResult> result) {
         //读取license文件
         Document document = readLicense();
         if (document == null) {
@@ -120,7 +146,7 @@ public class LicenseManager {
         Element lastValidateTimeEle = featuresEles.get(0);
         //提取上一次验证时间
         String lastValidateTimeStr = lastValidateTimeEle.attributeValue("ti");
-        long lastValidateTime = Long.parseLong(AESUtils.decrypt(lastValidateTimeStr));
+        long lastValidateTime = Long.parseLong(Objects.requireNonNull(AESUtils.decrypt(lastValidateTimeStr)));
         log.debug("上一次校验时间：{}", lastValidateTime);
         //提取签名内容
         Element signEle = rootElement.element("signature");
@@ -133,19 +159,24 @@ public class LicenseManager {
         }
         log.debug("签名内容：{}", sign);
         String[] signArr = sign.split("-");
-        if (signArr.length != 5) {
+        //前三个参数：生成时间、失效时间、版本号 再加上至少一个自定义控制参数
+        if (signArr.length < 4) {
             log.error("授权码不正确");
             result.put("Authorize", ValidateResult.error(ValidateCodeEnum.ILLEGAL));
             return null;
         }
 
-        CheckParams params = CheckParams.builder().lastValidateTime(lastValidateTime).macAddress(signArr[0])
-                .cpuSerial(signArr[1]).generatedTime(Long.parseLong(signArr[2])).expiredTime(Long.parseLong(signArr[3]))
-                .version(signArr[4]).build();
-        return params;
+        //自定义控制参数
+        List<String> customParams = new ArrayList<>(
+                Arrays.asList(
+                        Arrays.copyOfRange(signArr, 3, signArr.length - 1)
+                )
+        );
+        return CheckParams.builder().lastValidateTime(lastValidateTime).generatedTime(Long.parseLong(signArr[0]))
+                .expiredTime(Long.parseLong(signArr[1])).version(signArr[2]).customParams(customParams).build();
     }
 
-    private static Document readLicense() {
+    private Document readLicense() {
         Document document = null;
         try {
             SAXReader saxReader = new SAXReader();
@@ -156,12 +187,5 @@ public class LicenseManager {
             e.printStackTrace();
         }
         return null;
-    }
-
-    public static void main(String[] args) {
-//        String sign = AESUtils.decrypt("VorZodH/B6eeNLPA09TNJ8fpjlvrsckBk3VW3Pvr2qzhQVdeL38xS8unNFFxzQrjZ70f4wIoi1Tg1wlZq9DFKuVyp2zD20A//lDswyaD8NsmwMR72R2Ua+Gb0dp+PpM3b9gx2iIFIAtKOyaJlMMV8H4az/EKc/d733lyHfY3wbhsmo4vUvsqPYiriaj+psPu7DgO0DsQqw0xjAblpcrfL1xc42E3STEi9NTNbbBTsLU=");
-
-        String s="HPdW5CR3bRzVGEDMkZtsfQMHbcJ6SabTLJqdNsvJ7aU=";
-        System.out.println(AESUtils.decrypt(s));
     }
 }

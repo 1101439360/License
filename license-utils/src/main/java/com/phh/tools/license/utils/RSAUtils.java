@@ -1,13 +1,15 @@
-package com.dtranx.tools.licensecreate.utils;
+package com.phh.tools.license.utils;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
-import java.security.*;
+import java.security.InvalidKeyException;
+import java.security.KeyFactory;
+import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
-import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 
 /**
@@ -17,30 +19,6 @@ import java.util.Base64;
  * @createTime 14:28
  */
 public class RSAUtils {
-
-    /**
-     * 公钥base64
-     */
-    private static String puk = "MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCdfujgTmG4aOa4oK2VysmKvAI+hurN/wuKQjzgJTo3ct6TH5NHFHncb9KXijC1xk2Po+pJ8UjU4XGjU4gq5yhTdeSYPYR6hj5jqLy8fkWpFzeC6RvM4bLDe1lDNKphpcUoo5ZO7T77w9fX2lgJSyy/8LxdBThc4Megga3KW1/W4wIDAQAB";
-
-    /**
-     * 加密
-     *
-     * @return
-     * @throws Exception
-     */
-    protected static String encrypt(String content) throws Exception {
-
-        byte[] publicKeyBytes = puk.getBytes();
-        X509EncodedKeySpec x = new X509EncodedKeySpec(Base64.getDecoder().decode(publicKeyBytes));
-        KeyFactory keyFactory = KeyFactory.getInstance("RSA");
-        PublicKey pubKey = keyFactory.generatePublic(x);
-        Cipher cipher = Cipher.getInstance("RSA");
-        cipher.init(Cipher.ENCRYPT_MODE, pubKey);
-
-        byte[] result = cipher.doFinal(content.getBytes("UTF-8"));
-        return Base64.getEncoder().encodeToString(result);
-    }
 
     /**
      * 私钥base64
@@ -58,11 +36,5 @@ public class RSAUtils {
 
         byte[] result = cipher.doFinal(Base64.getDecoder().decode(signEncrypt));
         return new String(result);
-    }
-
-    public static void main(String[] args) throws Exception {
-        String password = "123456";
-        String a = encrypt(password);
-        System.out.println("AES加密秘钥：" + a);
     }
 }
