@@ -34,7 +34,7 @@
 (5)配置文件增加参数配置： xxy.checkTime  = 3600    
 （此参数是控制线程LicenseThread的校验频率，多久校验一次，单位/秒）
 
-###2、使用步骤：
+### 2、使用步骤：
 (1) 将工具打包，放到maven私库后，使用的服务pom文件加入私库地址，添加依赖
 ```java
 <dependency>
@@ -83,7 +83,7 @@ public Map<String,Object> updateSign(String sign){
 (6) 激活（生成新的授权码）  
 步骤二-2-(4) 获取到的服务器标识在 步骤一-2-(4)-① 生成新的license文件，取license的内容（即授权码）在二-2-(5)进行激活。  
 
-###3、自定义控制参数
+### 3、自定义控制参数
 （1）目前代码里面示例控制参数为 param1+param2，如果需要自定义或添加参数，可以在MySystemUtils中进行定义  
 （2）自定义参数之后在LicenseManager类中的todo处进行相关参数解析和获取
 
